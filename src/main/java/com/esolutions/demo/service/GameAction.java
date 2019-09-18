@@ -14,14 +14,35 @@ public class GameAction implements Runnable {
     private Environment environment;
 
     private volatile boolean running;
+    private volatile boolean paused;
+
+    public static final Object lock = new Object();
 
     public GameAction(MqttClient mqttClient, Environment environment) {
         this.mqttClient = mqttClient;
         this.environment = environment;
     }
 
-    public synchronized void terminate() {
-        System.out.println(Thread.currentThread().getName() + " : Terminating execution!");
+    public void markAsStarted() {
+        publish("Starting a game of tennis!");
+        running = true;
+    }
+
+    public void pause() {
+        publish("Pausing the game!");
+        paused = true;
+    }
+
+    public void resume() {
+        publish("Resuming the game!");
+        synchronized (lock) {
+            paused = false;
+            lock.notify();
+        }
+    }
+
+    public void terminate() {
+        publish("Stopping the game!");
         running = false;
     }
 
@@ -31,38 +52,52 @@ public class GameAction implements Runnable {
 
     @Override
     public void run() {
-        running = true;
-        while (running) {
+        synchronized (lock) {
             try {
-                while (p1 < 4 && p2 < 4) {
+                while (p1 < 4 && p2 < 4 && running && !paused) {
                     int serveWinner = (int) (Math.random() * 2);
 
                     if (serveWinner == 0) p1++;
                     else p2++;
 
-                    String gameScore = String.format("[%s] Game score : [%s - %s]", Thread.currentThread().getName(), format(p1), format(p2));
+                    String gameScore = String.format("Game score : [%s - %s]", format(p1), format(p2));
                     publish(gameScore);
 
                     TimeUnit.SECONDS.sleep(3);
                 }
 
-                String winMessage = "";
-
-                if (p1 == p2) {
-                    winMessage = "It's a draw!";
-                } else if (p1 > p2) {
-                    winMessage = "Game ended! Player 1 wins!";
-                } else {
-                    winMessage = "Game ended! Player 2 wins!";
+                if (!running) {
+                    //I have terminated the game
+                    publish("The game was stopped!");
+                    p1 = 0;
+                    p2 = 0;
+                    return;
                 }
 
-                publish(winMessage);
+                if (paused) {
+                    publish("The game was paused!");
+                    lock.wait();
+                }
+
+                publish(calculateWinMessage());
                 terminate();
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
+
         }
+
         System.out.println("Runnable ended its work!");
+    }
+
+    private String calculateWinMessage() {
+        if (p1 == p2) {
+            return "It's a draw!";
+        } else if (p1 > p2) {
+            return "Game ended! Player 1 wins!";
+        } else {
+            return "Game ended! Player 2 wins!";
+        }
     }
 
     private void publish(String message) {
@@ -77,5 +112,4 @@ public class GameAction implements Runnable {
     private String format(int player) {
         return String.valueOf(player * 15);
     }
-
 }

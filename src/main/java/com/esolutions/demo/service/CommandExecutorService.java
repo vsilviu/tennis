@@ -46,17 +46,19 @@ public class CommandExecutorService {
             throw new IllegalStateException("A game is already running! Send a STOP command!");
         }
         System.out.println("Starting game!");
+        gameAction.markAsStarted();
+        game = new Thread(gameAction);
         game.start();
     }
 
     private void pauseGame() throws InterruptedException {
         System.out.println("Pausing game!");
-        game.wait();
+        gameAction.pause();
     }
 
     private void resumeGame() {
         System.out.println("Resuming game!");
-        game.notify();
+        gameAction.resume();
     }
 
 
