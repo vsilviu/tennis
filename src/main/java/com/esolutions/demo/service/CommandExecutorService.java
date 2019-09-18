@@ -15,7 +15,7 @@ public class CommandExecutorService {
     @Autowired
     public CommandExecutorService(MqttClient mqttClient, Environment environment) {
         gameAction = new GameAction(mqttClient, environment);
-        game = new Thread(gameAction);
+        game = new Thread(gameAction, "Game-Thread");
     }
 
     public void execute(DeviceAction action) throws InterruptedException {
@@ -42,6 +42,9 @@ public class CommandExecutorService {
     }
 
     private void startGame() {
+        if (gameAction.isRunning()) {
+            throw new IllegalStateException("A game is already running! Send a STOP command!");
+        }
         System.out.println("Starting game!");
         game.start();
     }
@@ -57,9 +60,9 @@ public class CommandExecutorService {
     }
 
 
-    private void stopGame() {
-        System.out.println("Terminating game!");
+    private void stopGame() throws InterruptedException {
         gameAction.terminate();
+        game.join();
     }
 
 }

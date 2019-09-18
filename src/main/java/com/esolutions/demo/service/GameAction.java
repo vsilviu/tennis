@@ -13,50 +13,56 @@ public class GameAction implements Runnable {
     private MqttClient mqttClient;
     private Environment environment;
 
-    private volatile boolean running = true;
+    private volatile boolean running;
 
     public GameAction(MqttClient mqttClient, Environment environment) {
         this.mqttClient = mqttClient;
         this.environment = environment;
     }
 
-    public void terminate() {
+    public synchronized void terminate() {
+        System.out.println(Thread.currentThread().getName() + " : Terminating execution!");
         running = false;
+    }
+
+    public boolean isRunning() {
+        return running;
     }
 
     @Override
     public void run() {
+        running = true;
         while (running) {
-            while (p1 < 4 && p2 < 4) {
-                int serveWinner = (int) (Math.random() * 2);
+            try {
+                while (p1 < 4 && p2 < 4) {
+                    int serveWinner = (int) (Math.random() * 2);
 
-                if (serveWinner == 0) p1++;
-                else p2++;
+                    if (serveWinner == 0) p1++;
+                    else p2++;
 
-                String gameScore = String.format("Game score : [%s - %s]", format(p1), format(p2));
-                publish(gameScore);
+                    String gameScore = String.format("[%s] Game score : [%s - %s]", Thread.currentThread().getName(), format(p1), format(p2));
+                    publish(gameScore);
 
-                try {
                     TimeUnit.SECONDS.sleep(3);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
                 }
+
+                String winMessage = "";
+
+                if (p1 == p2) {
+                    winMessage = "It's a draw!";
+                } else if (p1 > p2) {
+                    winMessage = "Game ended! Player 1 wins!";
+                } else {
+                    winMessage = "Game ended! Player 2 wins!";
+                }
+
+                publish(winMessage);
+                terminate();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
-
-            String winMessage = "";
-
-            if (p1 == p2) {
-                winMessage = "It's a draw!";
-            } else if (p1 > p2) {
-                winMessage = "Game ended! Player 1 wins!";
-            } else {
-                winMessage = "Game ended! Player 2 wins!";
-            }
-
-            publish(winMessage);
-            terminate();
-            break;
         }
+        System.out.println("Runnable ended its work!");
     }
 
     private void publish(String message) {
