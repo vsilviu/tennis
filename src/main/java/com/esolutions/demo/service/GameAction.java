@@ -25,6 +25,7 @@ public class GameAction implements Runnable {
 
     public void markAsStarted() {
         publish("Starting a game of tennis!");
+        p1 = 0; p2 = 0;
         running = true;
     }
 
@@ -42,8 +43,14 @@ public class GameAction implements Runnable {
     }
 
     public void terminate() {
+        synchronized (lock) {
+            if (paused) {
+                paused = false;
+                lock.notify();
+            }
+            running = false;
+        }
         publish("Stopping the game!");
-        running = false;
     }
 
     public boolean isRunning() {
@@ -54,7 +61,21 @@ public class GameAction implements Runnable {
     public void run() {
         synchronized (lock) {
             try {
-                while (p1 < 4 && p2 < 4 && running && !paused) {
+                while (p1 < 4 && p2 < 4) {
+
+                    if (!running) {
+                        //I have terminated the game
+                        publish("The game was stopped!");
+                        p1 = 0;
+                        p2 = 0;
+                        return;
+                    }
+
+                    if (paused) {
+                        publish("The game was paused!");
+                        lock.wait();
+                    }
+
                     int serveWinner = (int) (Math.random() * 2);
 
                     if (serveWinner == 0) p1++;
@@ -64,19 +85,6 @@ public class GameAction implements Runnable {
                     publish(gameScore);
 
                     TimeUnit.SECONDS.sleep(3);
-                }
-
-                if (!running) {
-                    //I have terminated the game
-                    publish("The game was stopped!");
-                    p1 = 0;
-                    p2 = 0;
-                    return;
-                }
-
-                if (paused) {
-                    publish("The game was paused!");
-                    lock.wait();
                 }
 
                 publish(calculateWinMessage());
